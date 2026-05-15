@@ -40,6 +40,7 @@ Interactive docs (Swagger UI): `http://localhost:8000/docs`
 | `GET` | `/api/metrics/snapshot` | Single real-time snapshot (same shape as WebSocket metrics object) |
 | `GET` | `/api/metrics/history?limit=60` | Last N snapshots from SQLite |
 | `GET` | `/api/metrics/bottlenecks` | Recent bottleneck events from DB |
+| `GET` | `/api/metrics/containers` | Live Docker container stats (empty list if Docker unavailable) |
 
 ---
 

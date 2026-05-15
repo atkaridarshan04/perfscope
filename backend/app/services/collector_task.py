@@ -13,7 +13,7 @@ from app.models.metrics import MetricSnapshot, BottleneckEvent
 async def collect_and_store():
     while True:
         try:
-            metrics = collect_all()
+            metrics = await collect_all()
             bottlenecks = analyze(metrics)
 
             async with SessionLocal() as db:

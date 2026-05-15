@@ -21,8 +21,6 @@ A full-stack, real-time Linux performance analysis system for performance engine
 
 ## Quick Start
 
-### Option A — Local (recommended)
-
 ```bash
 # 1. One-time setup (installs tools, configures sudoers for perf)
 bash scripts/setup.sh
@@ -38,16 +36,6 @@ npm run dev
 ```
 
 Open: http://localhost:5173
-
-### Option B — Docker
-
-```bash
-docker compose up --build
-```
-
-> Docker uses `--privileged` + `pid: host` so `perf` works inside the container.
-
----
 
 ## sudoers Setup (for `perf`)
 
@@ -87,7 +75,6 @@ performance-monitoring-dashboard/
 │   │       ├── profiler.py           # POST /api/profiler/*
 │   │       └── ws.py                 # WebSocket /ws/metrics
 │   ├── requirements.txt
-│   └── Dockerfile
 ├── frontend/
 │   └── src/
 │       ├── App.jsx                   # Root layout
@@ -99,13 +86,11 @@ performance-monitoring-dashboard/
 │           └── panels/               # ProcessTable, BenchmarkPanel, ProfilerPanel
 ├── flamegraphs/                      # Generated SVG files served statically
 ├── scripts/setup.sh                  # One-time local setup script
-├── docs/
 │   ├── architecture.md               # System design and data flows
 │   ├── api-reference.md              # Full API endpoint reference
 │   ├── tools.md                      # Tool reference (perf, sysbench, fio, psutil)
 │   ├── bottleneck-guide.md           # How to interpret bottleneck alerts
 │   └── future-scope.md               # Planned features and AI/ML roadmap
-└── docker-compose.yml
 ```
 
 ---
@@ -120,7 +105,6 @@ performance-monitoring-dashboard/
 | Profiling | Linux perf, FlameGraph (Brendan Gregg) |
 | Database | SQLite via SQLAlchemy async |
 | Frontend | React 19, Vite, Recharts |
-| Container | Docker, docker-compose |
 
 ---
 

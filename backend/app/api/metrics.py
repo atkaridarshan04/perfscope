@@ -4,6 +4,7 @@ from sqlalchemy import select, desc
 from app.core.database import get_db
 from app.models.metrics import MetricSnapshot, BottleneckEvent
 from app.collectors.system import collect_all
+from app.collectors.docker import get_container_metrics
 from app.services.analyzer import analyze
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 @router.get("/snapshot")
 async def get_snapshot():
     """Single real-time snapshot."""
-    metrics = collect_all()
+    metrics = await collect_all()
     bottlenecks = analyze(metrics)
     return {"metrics": metrics, "bottlenecks": bottlenecks}
 
@@ -47,3 +48,9 @@ async def get_bottleneck_history(limit: int = 20, db: AsyncSession = Depends(get
     return [{"timestamp": r.timestamp, "resource": r.resource,
              "severity": r.severity, "message": r.message, "value": r.value}
             for r in rows]
+
+
+@router.get("/containers")
+async def get_containers():
+    """Live Docker container stats. Returns [] if Docker is not available."""
+    return await get_container_metrics()

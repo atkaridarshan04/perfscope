@@ -16,7 +16,7 @@ async def metrics_ws(websocket: WebSocket):
     _connections.append(websocket)
     try:
         while True:
-            metrics = collect_all()
+            metrics = await collect_all()
             bottlenecks = analyze(metrics)
             await websocket.send_text(json.dumps({
                 "metrics": metrics,

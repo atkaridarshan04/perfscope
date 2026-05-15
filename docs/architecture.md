@@ -122,7 +122,6 @@ backend/app/
 │                         Provides get_db() dependency for route handlers.
 ├── models/metrics.py     Three ORM models: MetricSnapshot, BenchmarkResult, BottleneckEvent
 ├── collectors/system.py  All psutil calls + /proc/stat IO wait parser.
-│                         collect_all() → single metrics dict.
 ├── services/
 │   ├── analyzer.py       Threshold-based bottleneck detection.
 │   ├── benchmark.py      Async subprocess wrappers for sysbench and fio.

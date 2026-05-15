@@ -1,7 +1,8 @@
+import asyncio
 import psutil
-import subprocess
 import time
 from typing import Optional
+from app.collectors.docker import get_container_metrics
 
 def get_cpu_metrics() -> dict:
     freq = psutil.cpu_freq()
@@ -74,7 +75,8 @@ def get_io_wait() -> Optional[float]:
     except Exception:
         return None
 
-def collect_all() -> dict:
+async def collect_all() -> dict:
+    containers = await get_container_metrics()
     return {
         "timestamp": time.time(),
         "cpu": get_cpu_metrics(),
@@ -84,4 +86,5 @@ def collect_all() -> dict:
         "load": get_load_average(),
         "io_wait": get_io_wait(),
         "processes": get_top_processes(),
+        "containers": containers,
     }
