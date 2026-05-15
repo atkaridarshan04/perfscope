@@ -1,6 +1,6 @@
 # Bottleneck Detection Guide
 
-The analyzer (`backend/app/services/analyzer.py`) automatically converts raw metrics into actionable insights. Here's how to interpret each alert.
+The analyzer (`backend/app/services/analyzer.py`) converts raw metrics into actionable alerts. Each detected condition produces a structured object with `resource`, `severity`, `value`, and a human-readable `message`.
 
 ---
 
@@ -21,17 +21,13 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `CPU usage at 92% — critical saturation detected`
 
-**What it means:** The CPU is nearly fully utilized. New requests queue up waiting for CPU time.
+The CPU is nearly fully utilized. New work queues waiting for CPU time.
 
-**Common causes:**
-- Too many concurrent processes
-- Inefficient algorithms (O(n²) loops, etc.)
-- Missing parallelism
-- Runaway process
+**Common causes:** too many concurrent processes, inefficient algorithms, runaway process.
 
-**How to investigate:**
-1. Check the Process Table — which process has highest CPU%?
-2. Run `perf stat` on that PID to see instruction efficiency
+**Investigate:**
+1. Check the Process Table — which process has the highest CPU%?
+2. Run `perf stat` on that PID to check instruction efficiency (IPC)
 3. Generate a FlameGraph to find the hot function
 
 ---
@@ -40,16 +36,11 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `Memory usage at 88% — warning: memory pressure`
 
-**What it means:** Available RAM is low. The kernel may start swapping soon.
+Available RAM is low. The kernel may start swapping soon.
 
-**Common causes:**
-- Memory leak in application
-- Too many processes
-- Large dataset loaded into RAM
+**Common causes:** memory leak, too many processes, large dataset in RAM.
 
-**How to investigate:**
-1. Check Process Table — which process has highest Mem%?
-2. Watch if Swap% starts rising (confirms pressure)
+**Investigate:** Check Process Table for highest Mem%. Watch if Swap% starts rising.
 
 ---
 
@@ -57,14 +48,9 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `Swap usage at 35% — system is paging (warning)`
 
-**What it means:** The system is using disk as overflow RAM. Disk is 100–1000× slower than RAM. This causes severe performance degradation.
+The system is using disk as overflow RAM. Disk is 100–1000× slower than RAM — even 20% swap causes noticeable slowdowns.
 
-**Common causes:**
-- RAM exhausted
-- Memory leak
-- Too many services running
-
-**This is serious.** Even 20% swap can cause noticeable slowdowns because every swap access hits disk.
+**Common causes:** RAM exhausted, memory leak, too many services.
 
 ---
 
@@ -72,17 +58,13 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `IO wait at 35% — warning: disk bottleneck`
 
-**What it means:** CPUs are idle waiting for disk IO to complete. The disk is the bottleneck, not the CPU.
+CPUs are idle waiting for disk IO to complete. The disk is the bottleneck, not the CPU.
 
-**Common causes:**
-- Slow HDD (vs SSD)
-- Disk saturated with writes
-- Database doing heavy sequential scans
-- RAID rebuild in progress
+**Common causes:** slow HDD, disk saturated with writes, heavy database scans.
 
-**How to investigate:**
+**Investigate:**
 1. Run the Disk benchmark to measure raw disk speed
-2. Check `disk_read_mb` and `disk_write_mb` in the metrics — which direction is heavy?
+2. Check `disk_read_mb` / `disk_write_mb` in metrics to see which direction is heavy
 
 ---
 
@@ -90,11 +72,11 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `Load average 8.2 on 4 CPUs — system overloaded`
 
-**What it means:** Load average counts processes in R (running) or D (uninterruptible sleep, usually IO wait) state. A load of 4.0 on a 4-core system = 100% utilized.
+Load average counts processes in R (running) or D (uninterruptible sleep / IO wait) state. On a 4-core machine, load = 4.0 means 100% utilized; load = 8.0 means processes are queuing.
 
-**Load > CPU count** = processes are queuing, waiting for CPU or IO.
+The analyzer normalizes: `load_norm = (load_1min / cpu_count) * 100`.
 
-**Note:** Load average alone doesn't tell you *why* — it could be CPU-bound or IO-bound. Check IO Wait and CPU% together.
+Load average alone doesn't tell you *why* — check IO Wait and CPU% together to distinguish CPU-bound from IO-bound overload.
 
 ---
 
@@ -102,9 +84,8 @@ The analyzer (`backend/app/services/analyzer.py`) automatically converts raw met
 
 **Alert:** `Disk usage at 91% — critical: filesystem filling up`
 
-**What it means:** The filesystem is nearly full. At 100%, writes fail, applications crash, logs stop.
+At 100%, writes fail and applications crash. Find large files immediately:
 
-**Immediate action:** Find and remove large files.
 ```bash
 du -sh /* 2>/dev/null | sort -rh | head -20
 ```

@@ -2,9 +2,9 @@
 
 ## psutil
 
-Python library that abstracts Linux's `/proc` filesystem into a clean API.
+Python library that abstracts Linux's `/proc` filesystem into a clean API. Used in `collectors/system.py` for all metric collection.
 
-| Function | What it reads | Returns |
+| Function | Reads from | Returns |
 |---|---|---|
 | `cpu_percent()` | `/proc/stat` | Overall CPU % |
 | `cpu_percent(percpu=True)` | `/proc/stat` | Per-core list |
@@ -21,19 +21,19 @@ Python library that abstracts Linux's `/proc` filesystem into a clean API.
 
 ## /proc filesystem
 
-Linux exposes kernel internals as virtual files:
+Linux exposes kernel internals as virtual files generated on-the-fly:
 
 ```
-/proc/stat        — CPU time counters (user, nice, system, idle, iowait...)
+/proc/stat        — CPU time counters (user, nice, system, idle, iowait, irq, softirq...)
 /proc/meminfo     — Memory and swap details
-/proc/loadavg     — Load averages + running/total processes
+/proc/loadavg     — Load averages + running/total process counts
 /proc/<pid>/stat  — Per-process CPU/memory stats
 /proc/diskstats   — Block device IO counters
 /proc/net/dev     — Network interface counters
 ```
 
-IO wait is calculated from `/proc/stat`:
-```
+IO wait is calculated directly from `/proc/stat`:
+```python
 iowait% = (iowait_ticks / total_ticks) * 100
 ```
 
@@ -41,33 +41,43 @@ iowait% = (iowait_ticks / total_ticks) * 100
 
 ## perf
 
-Linux kernel performance counters tool. Reads CPU hardware performance monitoring units (PMUs).
+Linux kernel performance counters tool. Reads CPU hardware Performance Monitoring Units (PMUs) — physical registers in the CPU silicon.
 
 ### perf stat
+
 Counts hardware events over a time window:
 ```bash
 sudo perf stat -e cycles,instructions,cache-misses,branch-misses -- sleep 5
 ```
 
-Key metrics:
-| Counter | Meaning | High value means |
+| Counter | Meaning | High value indicates |
 |---|---|---|
-| cycles | CPU clock cycles consumed | High CPU usage |
-| instructions | Instructions executed | Workload size |
-| cache-misses | L1/L2/L3 cache misses | Memory inefficiency |
-| branch-misses | Mispredicted branches | Poor branch patterns |
-| IPC (inst/cycle) | Instructions per cycle | CPU efficiency |
+| `cycles` | CPU clock cycles consumed | High CPU usage |
+| `instructions` | Instructions executed | Workload size |
+| `cache-misses` | L1/L2/L3 cache misses | Memory access inefficiency |
+| `branch-misses` | Mispredicted branches | Poor branch patterns |
+| IPC (`instructions/cycles`) | Instructions per cycle | CPU efficiency (< 1.0 = stalling) |
 
-### perf record + FlameGraph
+### perf record + FlameGraph pipeline
+
 ```bash
-sudo perf record -F 99 -g -a -- sleep 10   # sample at 99Hz, all CPUs
-sudo perf script | stackcollapse-perf.pl | flamegraph.pl > out.svg
+# Step 1: Record stack traces at 99Hz for 10s (system-wide)
+sudo perf record -F 99 -g -a -o /tmp/perf.data -- sleep 10
+
+# Step 2: Convert binary to text
+sudo perf script -i /tmp/perf.data > perf_output.txt
+
+# Step 3: Collapse identical stacks
+perl /opt/FlameGraph/stackcollapse-perf.pl < perf_output.txt > collapsed.txt
+
+# Step 4: Generate SVG
+perl /opt/FlameGraph/flamegraph.pl < collapsed.txt > flamegraph.svg
 ```
 
-`-F 99` — sample at 99Hz (not 100Hz to avoid lockstep with timer interrupts)
-`-g` — capture call graphs (stack traces)
-`-a` — system-wide (all CPUs)
-`-p <pid>` — profile specific process only
+Flag notes:
+- `-F 99` — 99Hz, not 100Hz, to avoid lockstep with timer interrupts
+- `-g` — capture full call graphs (stack traces, not just top-level function)
+- `-a` — system-wide across all CPUs; use `-p <pid>` for a specific process
 
 ---
 
@@ -79,44 +89,38 @@ Benchmark tool for CPU and memory.
 ```bash
 sysbench cpu --threads=4 --time=10 run
 ```
-Computes prime numbers. Measures:
-- Events per second (higher = faster CPU)
-- Latency (min/avg/max ms per event)
+Computes prime numbers up to 10,000 repeatedly. Pure CPU workload — no disk, no network.
+
+Key output: `events_per_second`, `latency_avg_ms`
 
 ### Memory benchmark
 ```bash
 sysbench memory --time=10 run
 ```
-Sequential memory read/write. Measures:
-- Throughput in MiB/sec
+Sequential memory read/write. Key output: throughput in MiB/sec.
 
 ---
 
 ## fio
 
-Flexible IO tester. Used for disk benchmarks.
+Flexible IO tester for disk benchmarks.
 
 ```bash
-fio --name=test --ioengine=libaio --iodepth=16 \
+fio --name=randreadwrite --ioengine=libaio --iodepth=16 \
     --rw=randrw --bs=4k --direct=1 --size=128m \
-    --runtime=10 --time_based --output-format=json
+    --runtime=10 --time_based \
+    --filename=/tmp/fio_test --output-format=json
 ```
 
-Key parameters:
-| Param | Meaning |
+| Parameter | Meaning |
 |---|---|
-| `ioengine=libaio` | Linux async IO (most realistic) |
-| `iodepth=16` | 16 concurrent IO requests |
-| `rw=randrw` | Mixed random read+write |
-| `bs=4k` | 4KB block size (typical for databases) |
-| `direct=1` | Bypass page cache (raw disk speed) |
+| `ioengine=libaio` | Linux async IO — most realistic for production workloads |
+| `iodepth=16` | 16 concurrent IO requests in flight (simulates a busy database) |
+| `rw=randrw` | Mixed random reads and writes (worst case for spinning disks) |
+| `bs=4k` | 4KB block size (standard database page size) |
+| `direct=1` | Bypass OS page cache — measures actual disk speed |
 
-Key output metrics:
-| Metric | Meaning |
-|---|---|
-| `bw` | Bandwidth in KB/s |
-| `iops` | IO operations per second |
-| `lat_ns.mean` | Average latency in nanoseconds |
+Key output metrics: `read_bw_kb`, `read_iops`, `read_lat_ms`, `write_bw_kb`, `write_iops`, `write_lat_ms`
 
 ---
 
@@ -124,15 +128,11 @@ Key output metrics:
 
 Visualizes where CPU time is spent across the call stack.
 
-```
-Wide block  → function consumes more CPU time
-Tall stack  → deep call chain
-```
+- **X-axis** — alphabetical order (not time)
+- **Y-axis** — call stack depth
+- **Block width** — proportion of CPU samples in that function
+- **Wide blocks at the top** — your hotspots
 
-Reading a flame graph:
-- X-axis = alphabetical (NOT time order)
-- Y-axis = call stack depth
-- Width = proportion of CPU samples
-- Look for the widest blocks at the top — those are your hotspots
+The SVG is interactive: click any block to zoom into that subtree.
 
 Repository: https://github.com/brendangregg/FlameGraph
